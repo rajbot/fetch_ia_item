@@ -1,5 +1,5 @@
-fetch_ia_item
-=============
+fetch_ia_item.py
+================
 
 This script will download all of an user's bookmarked items from archive.org.
 
