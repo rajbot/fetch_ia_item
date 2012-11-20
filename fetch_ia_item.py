@@ -30,6 +30,8 @@ requested_formats = {'pdf':  ['Text PDF', 'Additional Text PDF', 'Image Containe
 
 download_directory = 'items'
 
+should_download_cover = True
+
 
 # load_user_bookmarks()
 #_________________________________________________________________________________________
@@ -90,7 +92,7 @@ def download_files(item_id, matching_files, item_dir):
 
 # download_item()
 #_________________________________________________________________________________________
-def download_item(item_id, mediatype, out_dir, formats):
+def download_item(item_id, mediatype, metadata, out_dir, formats):
     """Download an archive.org item into the specified directory"""
 
     print "Downloading", item_id
@@ -99,8 +101,6 @@ def download_item(item_id, mediatype, out_dir, formats):
 
     if not os.path.exists(item_dir):
         os.mkdir(item_dir)
-
-    metadata = get_item_meatadata(item_id)
 
     files_list = metadata['files']
 
@@ -121,6 +121,35 @@ def download_item(item_id, mediatype, out_dir, formats):
                 break
 
 
+# download_cover()
+#_________________________________________________________________________________________
+def download_cover(item_id, metadata, download_directory):
+    files_list = metadata['files']
+
+    item_dir = os.path.join(download_directory, item_id)
+
+    #look for JPEG Thumbs
+    jpeg_thumbs = [x['name'] for x in files_list if x['format']=="JPEG Thumb"]
+    if jpeg_thumbs:
+        download_files(item_id, [jpeg_thumbs[0]], item_dir)
+        return jpeg_thumbs[0]
+
+    #no JPEG Thumbs, try JPEGs
+    jpegs = [x['name'] for x in files_list if x['format']=="JPEG"]
+    if jpegs:
+        download_files(item_id, [jpegs[0]], item_dir)
+        return jpegs[0]
+
+    #no JPEGs, try AGIF
+    gifs = [x['name'] for x in files_list if x['format']=="Animated GIF"]
+    if gifs:
+        download_files(item_id, [gifs[0]], item_dir)
+        return gifs[0]
+
+    #no JPEG Thumbs, JPEGs, or AGIFs, return None
+    return None
+
+
 # main()
 #_________________________________________________________________________________________
 if '__main__' == __name__:
@@ -130,4 +159,14 @@ if '__main__' == __name__:
     bookmarks = load_user_bookmarks(username)
 
     for item in bookmarks:
-        download_item(item['identifier'], item['mediatype'], download_directory, requested_formats)
+        item_id = item['identifier']
+        metadata = get_item_meatadata(item_id)
+
+        download_item(item_id, item['mediatype'], metadata, download_directory, requested_formats)
+
+        if should_download_cover:
+            cover_image = download_cover(item_id, metadata, download_directory)
+        else:
+            cover_image = None
+
+        print 'cover image = ', cover_image
