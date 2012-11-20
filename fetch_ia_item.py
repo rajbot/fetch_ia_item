@@ -4,6 +4,7 @@
 This script will download all of an user's bookmarked items from archive.org.
 """
 
+import re
 import os
 import sys
 import json
@@ -139,6 +140,55 @@ def download_cover(item_id, metadata, download_directory):
     return None
 
 
+# add_to_pathagar()
+#_________________________________________________________________________________________
+def add_to_pathagar(pathagar_books, mdata, cover_image):
+    pathagar_formats = []
+    if 'epub' in requested_formats:
+        pathagar_formats += requested_formats['epub']
+
+    if 'pdf' in requested_formats:
+        pathagar_formats += requested_formats['pdf']
+
+    if not pathagar_formats:
+        return
+
+    metadata = mdata['metadata']
+    files_list = mdata['files']
+    book_paths = [x['name'] for x in files_list if x['format'] in pathagar_formats]
+
+    if not book_paths:
+        return
+
+    item_dir = os.path.join(download_directory, item_id)
+    book_path = os.path.abspath(os.path.join(item_dir, book_paths[0]))
+
+    book = {
+        "book_path": os.path.abspath(book_path),
+        "a_title": metadata['title'],
+        "a_author": metadata['creator'],
+        "a_status": "Published",
+        "a_summary": metadata['description'],
+    }
+
+    if cover_image:
+        book['cover_path'] = os.path.abspath(os.path.join(item_dir, cover_image))
+
+
+    if 'subject' in metadata:
+        if isinstance(metadata['subject'], list):
+            tags = metadata['subject']
+        else:
+            tags = re.split(';\s*', metadata['subject'])
+
+        tags = [x.replace(' ', '_') for x in tags]
+        tags = [x.replace(',', '_') for x in tags]
+
+        book['tags'] = ','.join(tags)
+
+    pathagar_books.append(book)
+
+
 # main()
 #_________________________________________________________________________________________
 if '__main__' == __name__:
@@ -146,6 +196,9 @@ if '__main__' == __name__:
         os.mkdir(download_directory)
 
     bookmarks = load_user_bookmarks(username)
+
+    # Keep track of books that can be imported into Pathagar (currently only PDFs and EPUBs)
+    pathagar_books = []
 
     for item in bookmarks:
         item_id = item['identifier']
@@ -158,4 +211,10 @@ if '__main__' == __name__:
         else:
             cover_image = None
 
-        print 'cover image = ', cover_image
+        add_to_pathagar(pathagar_books, metadata, cover_image)
+
+    if pathagar_books:
+        json_path = os.path.join(download_directory, 'pathagar.json')
+        fh = open(json_path, 'w')
+        json.dump(pathagar_books, fh, indent=4)
+        fh.close()
