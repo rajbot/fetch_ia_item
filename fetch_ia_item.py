@@ -127,24 +127,13 @@ def download_cover(item_id, metadata, download_directory):
     files_list = metadata['files']
 
     item_dir = os.path.join(download_directory, item_id)
+    cover_formats = set(['JPEG Thumb', 'JPEG', 'Animated GIF'])
 
-    #look for JPEG Thumbs
-    jpeg_thumbs = [x['name'] for x in files_list if x['format']=="JPEG Thumb"]
-    if jpeg_thumbs:
-        download_files(item_id, [jpeg_thumbs[0]], item_dir)
-        return jpeg_thumbs[0]
+    covers = [x['name'] for x in files_list if x['format'] in cover_formats]
 
-    #no JPEG Thumbs, try JPEGs
-    jpegs = [x['name'] for x in files_list if x['format']=="JPEG"]
-    if jpegs:
-        download_files(item_id, [jpegs[0]], item_dir)
-        return jpegs[0]
-
-    #no JPEGs, try AGIF
-    gifs = [x['name'] for x in files_list if x['format']=="Animated GIF"]
-    if gifs:
-        download_files(item_id, [gifs[0]], item_dir)
-        return gifs[0]
+    if covers:
+        download_files(item_id, [covers[0]], item_dir)
+        return covers[0]
 
     #no JPEG Thumbs, JPEGs, or AGIFs, return None
     return None
