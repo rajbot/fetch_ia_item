@@ -64,6 +64,29 @@ def get_download_url(item_id, file):
     return prefix + os.path.join(item_id, file)
 
 
+# files_with_format()
+#_________________________________________________________________________________________
+def files_with_formats(files_list, formats_list):
+    assert isinstance(formats_list, (list, tuple, set))
+    return [x['name'] for x in files_list if x['format'] in formats_list]
+
+
+# wget()
+#_________________________________________________________________________________________
+def wget(url, path):
+    if os.path.exists(path):
+        print "    Already downloaded", path
+        return
+
+    ret = subprocess.call(['wget', url, '-O', path,
+                           '--limit-rate=1000k', '--user-agent=fetch_ia_item.py', '-q'])
+
+    if 0 != ret:
+        if os.path.exists(path):
+            os.unlink(path)
+        raise IOError, "ERROR DOWNLOADING "+url
+
+
 # download_files()
 #_________________________________________________________________________________________
 def download_files(item_id, matching_files, item_dir):
@@ -81,12 +104,7 @@ def download_files(item_id, matching_files, item_dir):
 
         print "    Downloading", file, "to", download_path
         download_url= get_download_url(item_id, file)
-        ret = subprocess.call(['wget', download_url, '-O', download_path,
-                               '--limit-rate=1000k', '--user-agent=fetch_ia_item.py', '-q'])
-
-        if 0 != ret:
-            print "    ERROR DOWNLOADING", file_path
-            sys.exit(-1)
+        wget(download_url, download_path)
 
         time.sleep(0.5)
 
@@ -113,7 +131,7 @@ def download_item(item_id, mediatype, metadata, out_dir, formats):
 
     for key, format_list in formats.iteritems():
         for format in format_list:
-            matching_files = [x['name'] for x in files_list if x['format']==format]
+            matching_files = files_with_formats(files_list, [format])
             download_files(item_id, matching_files, item_dir)
 
             #if we found some matching files in for this format, move on to next format
@@ -128,13 +146,41 @@ def download_cover(item_id, metadata, download_directory):
     files_list = metadata['files']
 
     item_dir = os.path.join(download_directory, item_id)
-    cover_formats = set(['JPEG Thumb', 'JPEG', 'Animated GIF'])
 
-    covers = [x['name'] for x in files_list if x['format'] in cover_formats]
+    cover_formats = set(['JPEG Thumb', 'JPEG'])
+    covers = files_with_formats(files_list, cover_formats)
 
     if covers:
-        download_files(item_id, [covers[0]], item_dir)
-        return covers[0]
+        front_covers = [x for x in covers if x.lower().endswith('front.jpg')]
+        if front_covers:
+            cover = front_covers[0]
+        else:
+            cover = covers[0]
+
+        print 'downloading cover ', cover
+        download_files(item_id, [cover], item_dir)
+        return cover
+
+    #no JPEGs in item, see if we can use the bookreader preview service
+    #presence of scandata indicates bookreader preview might work
+    scandata_files = files_with_formats(files_list, ['Scandata'])
+    if scandata_files:
+        cover_url = 'http://www.archive.org/download/%s/page/cover_small.jpg' % (item_id)
+        cover_path = os.path.join(item_dir, 'iabookreader_cover.jpg')
+        print 'downloading bookreader cover', cover_url
+        try:
+            wget(cover_url, cover_path)
+        except IOError:
+            print 'failed to download cover from', cover_url
+        else:
+            return cover_path
+
+    #no JPEGs or preview image, try AGIF
+    agif_covers = files_with_formats(files_list, ['Animated GIF'])
+    if agif_covers:
+        print 'downloading AGIF cover ', agif_covers[0]
+        download_files(item_id, [agif_covers[0]], item_dir)
+        return agif_covers[0]
 
     #no JPEG Thumbs, JPEGs, or AGIFs, return None
     return None
@@ -155,7 +201,7 @@ def add_to_pathagar(pathagar_books, mdata, cover_image):
 
     metadata = mdata['metadata']
     files_list = mdata['files']
-    book_paths = [x['name'] for x in files_list if x['format'] in pathagar_formats]
+    book_paths = files_with_formats(files_list, pathagar_formats)
 
     if not book_paths:
         return
